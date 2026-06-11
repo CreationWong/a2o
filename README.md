@@ -1,6 +1,6 @@
 # a2o - Anthropic to OpenAI API Proxy
 
-> 本人是地空学院博后，日常重度使用 Claude Code 辅助编程。Claude Code 的消息协议基于 Anthropic 格式，而 USTC 的 DeepSeek V4 目前仅 OpenAI 格式支持前缀缓存。市面上类似 `cc-switch` 的工具过于臃肿，于是利用Deepseek V4 pro写了这个极轻量的协议转换代理。
+> Forked from [inlizard](https://git.ustc.edu.cn/largeoyos/ai/-/tree/main/shares/inlizard) · Dockerized with env-var config support.
 
 **轻量 + 命中缓存**，让 Claude Code 无缝接入 USTC DeepSeek。
 
@@ -67,6 +67,23 @@ Claude Code ──Anthropic──▶ a2o ──OpenAI──▶ USTC LiteLLM
 
 ## 快速开始
 
+### Docker（推荐）
+
+```bash
+# 构建
+docker build -t a2o .
+
+# 运行（全部通过环境变量配置）
+docker run -d --name a2o -p 9999:9999 \
+  -e OPENAI_BASE_URL="https://api.llm.ustc.edu.cn/v1/chat/completions" \
+  -e OPENAI_API_KEY="sk-xxx" \
+  -e AUTH_TOKEN="your-client-auth-key" \
+  -e TZ=Asia/Shanghai \
+  a2o
+```
+
+### 原生二进制
+
 ```bash
 # 1. 编译
 go build -o a2o main.go
@@ -116,6 +133,25 @@ curl -s http://localhost:9999/v1/messages \
 | `services[].force_model` | 可选，强制覆盖客户端请求的 model 名称 |
 | `round_robin_address` | 可选，多服务负载均衡端口 |
 | `timeout_seconds` | 上游请求超时时间，默认 300 |
+
+> Docker 运行时可全部通过环境变量配置，配置文件为可选。
+
+### 环境变量配置
+
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `OPENAI_BASE_URL` | **上游 API 地址（必填）** | — |
+| `OPENAI_API_KEY` | **上游 API 密钥（必填）** | — |
+| `LISTEN_ADDRESS` | 监听端口 | `9999` |
+| `AUTH_TOKEN` | 客户端鉴权密钥 | 不鉴权 |
+| `DEBUG_LEVEL` | 日志级别 `info` / `debug` | `info` |
+| `TIMEOUT_SECONDS` | 上游超时 | `300` |
+| `FORCE_MODEL` | 强制覆盖 model 名称 | 不覆盖 |
+| `UPSTREAM_PROXY` | 上游代理地址 | 无 |
+| `ROUND_ROBIN_ADDRESS` | 多服务负载均衡端口 | 不开启 |
+| `SERVICE_COMMENT` | 服务备注名 | `default` |
+
+环境变量优先级高于配置文件。若 `OPENAI_BASE_URL` 或 `OPENAI_API_KEY` 未设置，则回退读取 `config.json`。
 
 ## 对接 Claude Code
 

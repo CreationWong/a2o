@@ -1,0 +1,9 @@
+# 不发送到 Docker 构建上下文的文件
+.git/
+.gitignore
+*.md
+config.json
+usage_stats.csv
+vendor/
+.idea/
+.vscode/
