@@ -1,0 +1,33 @@
+# --- 编译产物 ---
+a2o
+a2o.exe
+*.exe
+*.out
+*.test
+*.test.exe
+
+# --- 配置（密钥） ---
+config.json
+config.local.json
+*.local.json
+
+# --- 统计数据 / 运行产物 ---
+usage_stats.csv
+usage_stats.csv.tmp
+*.log
+*.pid
+
+# --- 依赖 ---
+vendor/
+
+# --- IDE ---
+.idea/
+*.swp
+*.swo
+*~
+.vscode/
+.vs/
+
+# --- OS ---
+.DS_Store
+Thumbs.db
