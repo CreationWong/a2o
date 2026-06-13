@@ -1,6 +1,8 @@
 # a2o - Anthropic to OpenAI API Proxy
 
 > Forked from [inlizard](https://git.ustc.edu.cn/largeoyos/ai/-/tree/main/shares/inlizard) · Dockerized with env-var config support.
+>
+> Latest version: **v1.1.0**
 
 **轻量 + 命中缓存**，让 Claude Code 无缝接入仅支持 OpenAI 格式的 API 服务。
 
@@ -97,9 +99,75 @@ export ANTHROPIC_BASE_URL=http://localhost:9999
 
 | 路径 | 说明 |
 |------|------|
-| `POST /v1/messages` | 主代理端点 |
+| `POST /v1/messages` | **主代理端点** — 接收 Anthropic 格式请求，转换为 OpenAI 格式转发 |
+| `GET /v1/models` | 模型列表（FORCE_MODEL 指定时直接返回；否则透传上游） |
+| `GET /models` | `/v1/models` 的别名 |
 | `GET /health` | 健康检查 |
 | `POST /v1/messages/count_tokens` | Token 估算 |
+
+## API 格式转换
+
+a2o 接收 **Anthropic Messages API** 格式的请求，转换为 **OpenAI Chat Completions** 格式发出，再将上游响应转换回 Anthropic 格式返回。
+
+### 请求 — Anthropic → OpenAI 字段映射
+
+| Anthropic 字段 | 转换方式 | OpenAI 目标 |
+|----------------|----------|------------|
+| `model` | 透传（FORCE_MODEL 指定则覆盖） | `model` |
+| `messages[]` (role: user) | 按顺序转换，保持 text / image / tool_result 顺序 | `user` / `tool` 消息 |
+| `messages[]` (role: assistant) | 拆分为 `reasoning_content` + text + `tool_calls` | `assistant` 消息 |
+| `system` | 转为首条 `system` 消息 | `messages[0].role = "system"` |
+| `max_tokens` | 透传 | `max_tokens` |
+| `stop_sequences` | 透传 | `stop` |
+| `stream` | 透传，自动添加 `stream_options: {include_usage: true}` | `stream` |
+| `temperature` | 透传 | `temperature` |
+| `top_p` | 透传 | `top_p` |
+| `tools[]` | `name` / `description` / `input_schema` → `function` 格式 | `tools[].function` |
+| `tool_choice` | 支持 `auto` / `any` → `required` / `tool` → `{type:"function", function:{name}}` | `tool_choice` |
+| `metadata.user_id` | 透传 | `user` |
+
+### 响应 — OpenAI → Anthropic 字段映射
+
+| OpenAI 字段 | 转换方式 | Anthropic 目标 |
+|-------------|----------|----------------|
+| `choices[0].message.reasoning_content` | → `thinking` 类型 content block | `content[].type = "thinking"` |
+| `choices[0].message.content` | → `text` 类型 content block | `content[].type = "text"` |
+| `choices[0].message.tool_calls` | → `tool_use` 类型 content block | `content[].type = "tool_use"` |
+| `choices[0].finish_reason` | `stop` → `end_turn`, `length` → `max_tokens`, `tool_calls` → `tool_use` | `stop_reason` |
+| `usage` | 透传 | `usage` |
+
+### 流式响应事件流
+
+a2o 将 OpenAI SSE 流逐帧转换为 Anthropic SSE 格式：
+
+```
+OpenAI data chunk → Anthropic event type
+────────────────────────────────────────
+delta.content       → content_block_delta (text_delta)
+delta.reasoning_content → content_block_delta (thinking_delta)
+delta.tool_calls    → content_block_start / content_block_delta (input_json_delta)
+finish_reason       → message_delta (stop_reason)
+usage               → message_delta (usage)
+[DONE]              → message_stop
+```
+
+### 消息顺序保持
+
+Anthropic 允许在一条消息中交错排列不同 content block 类型（如 text → tool_use → text），a2o 在转换时按以下策略保持顺序：
+
+- **user 消息**：text / image 合并为 `user` 条消息，`tool_result` 转为独立的 `tool` 消息
+- **assistant 消息**：按 text / thinking / tool_use 顺序拆分为多个 `assistant` 消息，确保 OpenAI 端正确辨识
+- **tool_use input 解嵌套**：自动检测并解开 `{"arguments": {...}}` 或 `{"arguments": "..."}` 嵌套结构
+
+### 支持的 Content Block 类型
+
+| 类型 | 上游 → a2o | a2o → 上游 |
+|------|-----------|-----------|
+| text | ✅ 接收 | ✅ 返回 |
+| thinking | ✅ 接收 | ✅ 返回 |
+| tool_use | ✅ 接收 | ✅ 返回 |
+| tool_result | ✅ 接收 | — |
+| image (base64 / URL) | ✅ 接收 | ✅ 返回 |
 
 ## 调试
 
