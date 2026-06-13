@@ -43,17 +43,14 @@ Claude Code ──Anthropic──▶ a2o ──OpenAI──▶ API Service
 ## 快速开始
 
 ```bash
+# 从 Docker Hub 拉取
 docker run -d --name a2o -p 9999:9999 \
   -e OPENAI_BASE_URL="https://your-api-service.com/v1/chat/completions" \
   -e OPENAI_API_KEY="sk-xxx" \
   -e AUTH_TOKEN="your-client-auth-key" \
-  -e TZ=Asia/Shanghai \
-  ghcr.io/creationwong/a2o
-```
+  creationwong/a2o
 
-或本地构建：
-
-```bash
+# 或本地构建
 docker build -t a2o .
 docker run -d --name a2o -p 9999:9999 \
   -e OPENAI_BASE_URL="..." \
