@@ -276,6 +276,9 @@ func main() {
 			mux := http.NewServeMux()
 			handler := makeHandler(func() ServiceConfig { return s }, s.ListenAddress)
 			mux.HandleFunc("/v1/messages", handler)
+			modelsHandler := makeModelsHandler(func() ServiceConfig { return s })
+			mux.HandleFunc("/v1/models", modelsHandler)
+			mux.HandleFunc("/models", modelsHandler)
 			addCommonEndpoints(mux)
 			log.Printf("Starting Service #%d on %s (%s)", idx+1, s.ListenAddress, s.Comment)
 			if err := http.ListenAndServe(fixAddr(s.ListenAddress), mux); err != nil {
@@ -298,6 +301,9 @@ func main() {
 			}
 			handler := makeHandler(rrProvider, config.RoundRobinAddress)
 			mux.HandleFunc("/v1/messages", handler)
+			rrModelsHandler := makeModelsHandler(rrProvider)
+			mux.HandleFunc("/v1/models", rrModelsHandler)
+			mux.HandleFunc("/models", rrModelsHandler)
 			addCommonEndpoints(mux)
 			log.Printf("Starting Global Round-Robin Listener on %s", config.RoundRobinAddress)
 			if err := http.ListenAndServe(fixAddr(config.RoundRobinAddress), mux); err != nil {
@@ -331,6 +337,61 @@ func addCommonEndpoints(mux *http.ServeMux) {
 		}
 		json.NewEncoder(w).Encode(map[string]int{"input_tokens": count})
 	})
+}
+
+func makeModelsHandler(getServiceConfig configProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			http.Error(w, "Method Not Allowed", 405)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
+		svc := getServiceConfig()
+
+		// FORCE_MODEL 指定时直接返回该模型
+		if svc.ForceModel != "" {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"object": "list",
+				"data": []map[string]interface{}{
+					{
+						"id":       svc.ForceModel,
+						"object":   "model",
+						"owned_by": "deepseek",
+					},
+				},
+			})
+			return
+		}
+
+		// 未指定 FORCE_MODEL: 转发到上游 /v1/models
+		client := getOrCreateClient(svc)
+		upstreamURL := svc.OpenAIBaseURL
+		if upstreamURL == "" {
+			http.Error(w, "Upstream Not Configured", 502)
+			return
+		}
+		upstreamURL = strings.Replace(upstreamURL, "/chat/completions", "/models", 1)
+
+		req, _ := http.NewRequestWithContext(r.Context(), "GET", upstreamURL, nil)
+		if svc.OpenAIAPIKey != "" {
+			req.Header.Set("Authorization", "Bearer "+svc.OpenAIAPIKey)
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			log.Printf("[ERR] Models upstream request failed: %v", err)
+			http.Error(w, "Upstream Error", 502)
+			return
+		}
+		defer resp.Body.Close()
+
+		body, _ := io.ReadAll(resp.Body)
+		w.WriteHeader(resp.StatusCode)
+		w.Write(body)
+	}
 }
 
 func loadConfig(path string) {
