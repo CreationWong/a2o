@@ -79,10 +79,20 @@ curl -s http://localhost:9999/v1/messages \
 | `AUTH_TOKEN` | 客户端鉴权密钥 | 不鉴权 |
 | `DEBUG_LEVEL` | 日志级别 `info` / `debug` | `info` |
 | `TIMEOUT_SECONDS` | 上游超时 | `300` |
-| `FORCE_MODEL` | 强制覆盖 model 名称 | 不覆盖 |
+| `FORCE_MODEL` | 强制覆盖 model 名称；支持 `上游id:下游id,ds:deepseek` 映射语法 | 不覆盖 |
 | `UPSTREAM_PROXY` | 上游代理地址 | 无 |
 | `ROUND_ROBIN_ADDRESS` | 多服务负载均衡端口 | 不开启 |
-| `SERVICE_COMMENT` | 服务备注名 | `default` |
+| `SERVICE_COMMENT` | 服务备注名；作为 `/v1/models` 返回的供应商名 | `default` |
+
+`FORCE_MODEL` 映射示例：
+
+```bash
+# 客户端看到 deepseek，请求 deepseek 时转发给上游 ds
+FORCE_MODEL="ds:deepseek"
+
+# 多模型映射
+FORCE_MODEL="ds:deepseek,gpt-4o:openai"
+```
 
 ## 对接 Claude Code
 
