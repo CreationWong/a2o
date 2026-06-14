@@ -2,10 +2,10 @@
 FROM golang:1.23-alpine AS builder
 
 WORKDIR /app
-COPY *.go .
+COPY src/ ./src/
 
 # CGO_ENABLED=0 生成纯静态二进制，兼容 scratch / alpine
-RUN CGO_ENABLED=0 GO111MODULE=off go build -ldflags="-s -w" -o a2o .
+RUN CGO_ENABLED=0 GO111MODULE=off go build -ldflags="-s -w" -o a2o ./src
 
 # ---- Runtime Stage ----
 FROM alpine:3.20

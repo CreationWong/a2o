@@ -1,6 +1,6 @@
 # --- 编译产物 ---
-a2o
-a2o.exe
+/a2o
+/a2o.exe
 *.exe
 *.out
 *.test
